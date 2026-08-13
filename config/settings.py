@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+
+import dj_database_url
 from tools.secure_env import load_secure_environment
 
 # Build paths inside the project like this: BASE_DIR / "subdir".
@@ -28,14 +30,27 @@ load_secure_environment(BASE_DIR)
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
 if not SECRET_KEY:
     raise RuntimeError("DJANGO_SECRET_KEY is not configured.")
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Use local debug mode by default, but disable it automatically on Render.
+DEBUG = os.getenv(
+    "DJANGO_DEBUG",
+    "false" if "RENDER" in os.environ else "true",
+).strip().lower() in {"1", "true", "yes", "on"}
 
+# Keep local development hosts and add the active Render hostname at runtime.
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
-    "seeds-lynn-such-cheese.trycloudflare.com",
 ]
+
+render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if render_hostname and render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_hostname)
+
+# Optional comma-separated custom domains for production.
+for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(","):
+    host = host.strip()
+    if host and host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(host)
 
 
 # Application definition
@@ -57,7 +72,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-        "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -89,12 +105,25 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+database_url = os.getenv("DATABASE_URL", "").strip()
+
+if database_url:
+    # Render supplies DATABASE_URL for the production PostgreSQL database.
+    DATABASES = {
+        "default": dj_database_url.parse(
+            database_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Preserve SQLite for the existing local development workflow.
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -131,7 +160,27 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise serves collected Django static files in production.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
+
+# The production frontend URL is injected by Render/Vercel.
+FRONTEND_URL = os.getenv(
+    "FRONTEND_URL",
+    "http://localhost:5173",
+).strip().rstrip("/")
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -139,12 +188,24 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5174",
     "http://localhost:5175",
     "http://127.0.0.1:5175",
-        "http://localhost:5181",
+    "http://localhost:5181",
     "http://127.0.0.1:5181",
-        "http://localhost:5177",
+    "http://localhost:5177",
     "http://127.0.0.1:5177",
-
 ]
+
+if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+
+# Trust the configured frontend origin for Django CSRF-protected endpoints.
+CSRF_TRUSTED_ORIGINS = []
+if FRONTEND_URL.startswith(("http://", "https://")):
+    CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
+
+# Render terminates HTTPS at its proxy and forwards the original scheme.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",

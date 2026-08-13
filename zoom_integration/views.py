@@ -65,12 +65,12 @@ class ZoomCallbackView(APIView):
 
         if zoom_error:
             return redirect(
-                "http://localhost:5173/dashboard?zoom=denied"
+                f"{settings.FRONTEND_URL}/dashboard?zoom=denied"
             )
 
         if not authorization_code or not state:
             return redirect(
-                "http://localhost:5173/dashboard?zoom=failed"
+                f"{settings.FRONTEND_URL}/dashboard?zoom=failed"
             )
 
         # Resolve and consume the short-lived state token.
@@ -80,7 +80,7 @@ class ZoomCallbackView(APIView):
 
         if user_id is None:
             return redirect(
-                "http://localhost:5173/dashboard?zoom=invalid-state"
+                f"{settings.FRONTEND_URL}/dashboard?zoom=invalid-state"
             )
 
         cache.delete(
@@ -93,7 +93,7 @@ class ZoomCallbackView(APIView):
             )
         except User.DoesNotExist:
             return redirect(
-                "http://localhost:5173/dashboard?zoom=invalid-state"
+                f"{settings.FRONTEND_URL}/dashboard?zoom=invalid-state"
             )
 
         token_response = requests.post(
@@ -112,7 +112,7 @@ class ZoomCallbackView(APIView):
 
         if not token_response.ok:
             return redirect(
-                "http://localhost:5173/dashboard?zoom=token-error"
+                f"{settings.FRONTEND_URL}/dashboard?zoom=token-error"
             )
 
         token_data = token_response.json()
@@ -124,7 +124,7 @@ class ZoomCallbackView(APIView):
 
         if not access_token or not refresh_token:
             return redirect(
-                "http://localhost:5173/dashboard?zoom=token-error"
+                f"{settings.FRONTEND_URL}/dashboard?zoom=token-error"
             )
 
         # Fetch the connected Zoom user's profile when the granted
@@ -161,7 +161,7 @@ class ZoomCallbackView(APIView):
         )
 
         return redirect(
-            "http://localhost:5173/dashboard?zoom=connected"
+            f"{settings.FRONTEND_URL}/dashboard?zoom=connected"
         )
 
 

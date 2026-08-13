@@ -1,0 +1,17 @@
+# Local secrets
+.env
+.env.enc
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# Django local state
+db.sqlite3
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

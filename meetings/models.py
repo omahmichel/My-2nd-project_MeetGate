@@ -41,12 +41,16 @@ class Meeting(models.Model):
         default="",
     )
 
+    # Zoom join URLs can exceed Django URLField's default 200 characters.
     join_url = models.URLField(
+        max_length=2000,
         blank=True,
         default="",
     )
 
+    # Host start URLs can be long because Zoom includes authorization data.
     start_url = models.URLField(
+        max_length=2000,
         blank=True,
         default="",
     )

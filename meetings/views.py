@@ -1,6 +1,4 @@
 from django.shortcuts import get_object_or_404
-from django.conf import settings
-from django.core.mail import send_mail
 from django.contrib.auth.models import User
 from rest_framework import generics, serializers
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +12,7 @@ from zoom_integration.services import (
     update_zoom_meeting,
 )
 
+from .email_service import ResendEmailError, send_resend_email
 from .models import Meeting, MeetingParticipant
 from .serializers import MeetingParticipantSerializer, MeetingSerializer
 
@@ -194,14 +193,14 @@ class MeetingParticipantListCreateView(generics.ListCreateAPIView):
         )
 
         try:
-            send_mail(
+            # Send invitations through Resend over HTTPS so production does
+            # not depend on SMTP ports that may be blocked by the host.
+            send_resend_email(
+                to_email=participant.email,
                 subject=subject,
                 message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[participant.email],
-                fail_silently=False,
             )
-        except Exception as exc:
+        except ResendEmailError as exc:
             # Keep participant creation consistent if delivery fails.
             participant.delete()
             raise serializers.ValidationError(

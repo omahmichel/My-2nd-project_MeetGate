@@ -255,3 +255,10 @@ DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
     EMAIL_HOST_USER or "MeetGate <no-reply@localhost>",
 )
+
+# Resend sends production invitation emails over HTTPS instead of SMTP.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+RESEND_FROM_EMAIL = os.getenv(
+    "RESEND_FROM_EMAIL",
+    "MeetGate <notifications@mail.meetgatehq.com>",
+).strip()

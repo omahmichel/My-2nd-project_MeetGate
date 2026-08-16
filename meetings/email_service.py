@@ -7,6 +7,15 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+def _resend_diagnostic(message, *args):
+    """Write safe Resend diagnostics directly to the production log stream."""
+    if args:
+        message = message % args
+
+    # stdout is captured by Render and contains no API keys or recipient data.
+    print(message, flush=True)
+
+
 class ResendEmailError(Exception):
     """Raised when a transactional email cannot be delivered to Resend."""
 
@@ -18,7 +27,7 @@ def send_resend_email(*, to_email, subject, message):
 
     if not api_key:
         # Log configuration state without ever logging the secret itself.
-        logger.error(
+        _resend_diagnostic(
             "Resend configuration error: RESEND_API_KEY is missing."
         )
         raise ResendEmailError(
@@ -26,7 +35,7 @@ def send_resend_email(*, to_email, subject, message):
         )
 
     if not from_email:
-        logger.error(
+        _resend_diagnostic(
             "Resend configuration error: RESEND_FROM_EMAIL is missing."
         )
         raise ResendEmailError(
@@ -50,7 +59,7 @@ def send_resend_email(*, to_email, subject, message):
             timeout=10,
         )
     except requests.RequestException as exc:
-        logger.error(
+        _resend_diagnostic(
             "Resend network error: %s.",
             exc.__class__.__name__,
         )
@@ -77,7 +86,7 @@ def send_resend_email(*, to_email, subject, message):
         except ValueError:
             error_type = "invalid_json"
 
-        logger.error(
+        _resend_diagnostic(
             "Resend rejected email request: HTTP %s; type=%s; message=%s",
             response.status_code,
             error_type,
@@ -90,7 +99,7 @@ def send_resend_email(*, to_email, subject, message):
     try:
         data = response.json()
     except ValueError as exc:
-        logger.error(
+        _resend_diagnostic(
             "Resend response error: successful response was not valid JSON."
         )
         raise ResendEmailError(
@@ -98,7 +107,7 @@ def send_resend_email(*, to_email, subject, message):
         ) from exc
 
     if not data.get("id"):
-        logger.error(
+        _resend_diagnostic(
             "Resend response error: successful response had no email ID."
         )
         raise ResendEmailError(

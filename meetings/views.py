@@ -12,6 +12,7 @@ from zoom_integration.services import (
     update_zoom_meeting,
 )
 
+from .calendar_invite import build_calendar_attachment
 from .email_service import ResendEmailError, send_resend_email
 from .models import Meeting, MeetingParticipant
 from .serializers import MeetingParticipantSerializer, MeetingSerializer
@@ -188,9 +189,14 @@ class MeetingParticipantListCreateView(generics.ListCreateAPIView):
             f"Join link: {meeting.join_url or 'Not available'}\n\n"
             f"Hosted by: "
             f"{meeting.host.get_full_name().strip() or meeting.host.email}\n\n"
+            "Calendar: Open the attached MeetGate .ics file to add this "
+            "meeting to your calendar.\n\n"
             "Regards,\n"
             "MeetGate"
         )
+
+        # Attach a portable calendar file for the participant.
+        calendar_attachment = build_calendar_attachment(meeting)
 
         try:
             # Send invitations through Resend over HTTPS so production does
@@ -199,6 +205,7 @@ class MeetingParticipantListCreateView(generics.ListCreateAPIView):
                 to_email=participant.email,
                 subject=subject,
                 message=message,
+                attachments=[calendar_attachment],
             )
         except ResendEmailError as exc:
             # Keep participant creation consistent if delivery fails.

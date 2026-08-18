@@ -1,3 +1,4 @@
+import base64
 import logging
 
 import requests
@@ -20,8 +21,14 @@ class ResendEmailError(Exception):
     """Raised when a transactional email cannot be delivered to Resend."""
 
 
-def send_resend_email(*, to_email, subject, message):
-    """Send one plain-text transactional email through the Resend HTTPS API."""
+def send_resend_email(
+    *,
+    to_email,
+    subject,
+    message,
+    attachments=None,
+):
+    """Send one transactional email through the Resend HTTPS API."""
     api_key = settings.RESEND_API_KEY
     from_email = settings.RESEND_FROM_EMAIL
 
@@ -42,6 +49,32 @@ def send_resend_email(*, to_email, subject, message):
             "Resend sender email is not configured."
         )
 
+    payload = {
+        "from": from_email,
+        "to": [to_email],
+        "subject": subject,
+        "text": message,
+    }
+
+    if attachments:
+        # Resend accepts attachment content as a Base64-encoded string.
+        payload["attachments"] = []
+
+        for attachment in attachments:
+            filename = attachment["filename"]
+            content = attachment["content"]
+
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+
+            encoded_content = base64.b64encode(content).decode("ascii")
+            payload["attachments"].append(
+                {
+                    "filename": filename,
+                    "content": encoded_content,
+                }
+            )
+
     try:
         response = requests.post(
             "https://api.resend.com/emails",
@@ -50,12 +83,7 @@ def send_resend_email(*, to_email, subject, message):
                 "Content-Type": "application/json",
                 "User-Agent": "MeetGate/1.0",
             },
-            json={
-                "from": from_email,
-                "to": [to_email],
-                "subject": subject,
-                "text": message,
-            },
+            json=payload,
             timeout=10,
         )
     except requests.RequestException as exc:
